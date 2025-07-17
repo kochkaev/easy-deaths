@@ -1,8 +1,10 @@
 package com.ringpro.mixin;
 
+import com.ringpro.EasyDeathsMod;
 import com.ringpro.access.ItemEntityInterface;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.player.PlayerPosition;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.packet.s2c.play.EntityPositionS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket;
@@ -17,6 +19,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.EnumSet;
+import java.util.Objects;
+
 @Mixin(ItemEntity.class)
 public class ItemEntityMixin implements ItemEntityInterface {
     @Unique private boolean isAcutallyInvulnerable;
@@ -25,7 +30,7 @@ public class ItemEntityMixin implements ItemEntityInterface {
 
 
     @Inject(method = "damage", at = @At("HEAD"), cancellable = true)
-    public void inv(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+    public void inv(ServerWorld world, DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
         if (getAcutallyInvulnerable()) {
             cir.setReturnValue(false);
         }
@@ -33,12 +38,11 @@ public class ItemEntityMixin implements ItemEntityInterface {
     @Inject(at=@At("HEAD"), method="tick()V")
     private void tick(CallbackInfo ci) {
         World world = itemEntity.getWorld();
-        if (itemEntity.getY() < -64) {
+        if (itemEntity.getY() < world.getBottomY()) {
             if (getAcutallyInvulnerable()) {
                 if (!world.isClient) {
-                    itemEntity.teleport((ServerWorld) itemEntity.getWorld(),itemEntity.getX(), -60, itemEntity.getZ(), PositionFlag.VALUES,0,0);
+                    itemEntity.requestTeleport(itemEntity.getX(), world.getBottomY()+4, itemEntity.getZ());
                     itemEntity.setVelocity(0, 0, 0);
-                    ((ServerWorld)world).getChunkManager().sendToNearbyPlayers(itemEntity, new EntityPositionS2CPacket(itemEntity));
                     ((ServerWorld)world).getChunkManager().sendToNearbyPlayers(itemEntity, new EntityVelocityUpdateS2CPacket(itemEntity));
                 }
             }
@@ -48,8 +52,8 @@ public class ItemEntityMixin implements ItemEntityInterface {
 
     @Inject(method = "readCustomDataFromNbt", at = @At("TAIL"))
     public void read(NbtCompound nbt, CallbackInfo ci) {
-        setAcutallyInvulnerable(nbt.getBoolean("easydeaths:isAcutallyInvulnerable"));
-        setShouldGlow(nbt.getBoolean("easydeaths:shouldGlow"));
+        setAcutallyInvulnerable(nbt.getBoolean("easydeaths:isAcutallyInvulnerable", false));
+        setShouldGlow(nbt.getBoolean("easydeaths:shouldGlow", false));
     }
 
     @Inject(method = "writeCustomDataToNbt", at = @At("TAIL"))
